@@ -145,26 +145,25 @@ class FirFilterFactory:
     def getLowPassCoefficients(f1,f2, fs, dbAtt=40, showFreqResp=True, N = 0):
         df = f2 - f1
         if N == 0:
-            nCoeffs = round((dbAtt * fs) / (22 * df))
+            numTaps = round((dbAtt * fs) / (22 * df))
         else:
-            nCoeffs = N
+            numTaps = N
         print("Calculating FIR low pass filter with:\n"
                 f"  f(-3dB) = {f1} Hz""\n"
                 f"  f(-{dbAtt}db) = {f2} Hz""\n"
-                f"  N = {nCoeffs}")
+                f"  N = {numTaps}")
         fcut = f1 / (fs/2)
-        b = signal.firwin(numtaps=nCoeffs, fs=fs, cutoff=fcut)
+        b = signal.firwin(numTaps, fcut)
 
         if showFreqResp==True:
             FirFilterFactory.plotFreqz(b, fs, f1)
-            #FirFilterFactory.plotImpz(ax[2:len(ax)], b)
         return b
-
+    
     def plotFreqz(b, fs, fcut, a=1):
         f, axs = plt.subplots(4,1)
         f.suptitle(f"Filter response with fcut={fcut} @ fs={fs}")
-        fTests = [round((fs/2)/50), round((fs/2)/10), round((fs/2)/5), round((fs/2)/2), round((fs/2)/1.5)]
-        
+        #fTests = [round((fs/2)/50), round((fs/2)/10), round((fs/2)/5), round((fs/2)/2), round((fs/2)/1.5)]
+        fTests = [round((fs/2)/50), round((fs/2)/5), round((fs/2)/2), round((fs/2)/1.5)]
         numSamples=4096
 
         xTest = np.arange(start=1,stop=1000)
@@ -211,40 +210,6 @@ class FirFilterFactory:
 
         plt.draw()
         plt.pause(0.1)
-
-
-    #Plot frequency and phase response
-    def NplotFreqz(axs, b, a=1):
-        w,h = signal.freqz(b,a)
-        h_dB = 20 * log10 (abs(h))
-        axs[0].plot(w/max(w),h_dB)
-        axs[0].set_ylim(-150, 5)
-        axs[0].set_ylabel('Magnitude (db)')
-        axs[0].set_xlabel(r'Normalized Frequency (x$\pi$rad/sample)')
-        axs[0].set_title(r'Frequency response')
-        h_Phase = unwrap(arctan2(imag(h),real(h)))
-        axs[1].plot(w/max(w),h_Phase)
-        axs[1].set_ylabel('Phase (radians)')
-        axs[1].set_xlabel(r'Normalized Frequency (x$\pi$rad/sample)')
-        axs[1].set_title(r'Phase response')
-
-    #Plot step and impulse response
-    def NplotImpz(axs, b, a=1):
-        l = len(b)
-        impulse = repeat(0.,l); impulse[0] =1.
-        x = arange(0,l)
-        response = signal.lfilter(b,a,impulse)
-        axs[0].stem(x, response)
-        axs[0].set_ylabel('Amplitude')
-        axs[0].set_xlabel(r'n (samples)')
-        axs[0].set_title(r'Impulse response')
-
-        step = cumsum(response)
-        axs[1].stem(x, step)
-        axs[1].set_ylabel('Amplitude')
-        axs[1].set_xlabel(r'n (samples)')
-        axs[1].set_title(r'Step response')
-
 class FirFilter:
     def __init__(self, coeffs:list, postShift=0, stages=1):
         self.coeffs = coeffs
@@ -255,10 +220,12 @@ class FirFilter:
             self.history.append(np.zeros(len(self.coeffs)))
     
     def printCoeffsCArray(self, reverse=False):
-        print(f"int16_t firCoeffs[{len(self.coeffsQ15)}] = ""\n{")
         coeffs = list(self.coeffsQ15.copy())
+        reversed = ""
         if reverse == True:
             coeffs.reverse()
+            reversed = "_reversed"
+        print(f"int16_t firCoeffs{reversed}[{len(self.coeffsQ15)}] = ""\n{")
         for c in range(0, len(coeffs), 8):
             line = "  "
             for cc in range(8):
@@ -275,12 +242,9 @@ class FirFilter:
         output = np.zeros(len(input))
         for n in range(0,len(input)):
             for stage in range(0, self.stages):
-                if(input[n] != 0):
-                    output[n] = self.coeffs[0] * input[n]
-                    calcCount +=1
-                else:
-                    skipCount += 1
-                for c in range(1, len(self.coeffs)):
+                self.history[stage][0] = input[n]
+                output[n] = 0
+                for c in range(0, len(self.coeffs)):
                     if(self.history[stage][c] != 0):
                         output[n] = output[n] + (self.coeffs[c] * self.history[stage][c])
                         calcCount +=1
@@ -290,7 +254,6 @@ class FirFilter:
                 if n >= 1:
                     for h in range(len(self.history[stage])-1, 0, -1):
                         self.history[stage][h] = self.history[stage][h-1]
-                self.history[stage][0] = input[n]
         
         print(f"Skipped {skipCount} muls and calculated {calcCount} muls! --> calcCount/skipCount = {calcCount/skipCount}")
 
