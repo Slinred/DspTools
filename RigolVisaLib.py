@@ -1,4 +1,5 @@
 from enum import Enum
+import re
 import pyvisa as pv
 
 class ExtendedEnum(Enum):
@@ -23,6 +24,21 @@ class RigolChannelCoupling(ExtendedEnum):
     AC = "AC"
     DC = "DC"
     GND = "GND"
+
+class RigolWaveformSources(ExtendedEnum):
+    CHAN1 = "CHANnel1"
+    CHAN2 = "CHANnel2"
+    CHAN3 = "CHANnel3"
+    CHAN4 = "CHANnel4"
+    MATH = "MATH"
+
+    @classmethod
+    def getChannelNumber(cls, eVal):
+        match = re.search(r".*([0-9]).*", eVal.value)
+        ch = 0
+        if match != None and len(match.groups()) > 0:
+            ch = int(match.group(1))
+        return ch
 
 class RigolVisaDS1100ZE:
     def __init__(self, addr, maxChannels=2):
@@ -80,7 +96,7 @@ class RigolVisaDS1100ZE:
         if channel <= self.channels:
             return True
         else:
-            raise ValueError(f"Channel number exceeds maximum number of {self.channels} channels!")
+            raise ValueError(f"Channel number {channel} exceeds maximum number of {self.channels} channels!")
 
     def getInstrumentId(self):
         id = self.readCmd("*IDN?")
@@ -107,7 +123,7 @@ class RigolVisaDS1100ZE:
     
     def getChannelBwLimit(self, channel:int):
         if self.checkValidChannel(channel):
-            bwLimit = self.readCmd(f"CHANnel{channel}:BWLimit?")
+            bwLimit = self.readCmd(f":CHANnel{channel}:BWLimit?")
             bwLimit = RigolBwLimit.getEnumFromStr(bwLimit)
             return bwLimit
         else:
@@ -115,11 +131,11 @@ class RigolVisaDS1100ZE:
 
     def setChannelCoupling(self, channel:int, coupling:RigolChannelCoupling):
         if self.checkValidChannel(channel) == True:
-             return self.writeCmd(f"CHANnel{channel}:COUPling {coupling.value}")
+             return self.writeCmd(f":CHANnel{channel}:COUPling {coupling.value}")
       
     def getChannelCoupling(self, channel:int):
         if self.checkValidChannel(channel):
-            data = self.readCmd(f"CHANnel{channel}:COUPling?")
+            data = self.readCmd(f":CHANnel{channel}:COUPling?")
             coupling = RigolChannelCoupling.getEnumFromStr(data)
             return coupling
         else:
@@ -132,11 +148,11 @@ class RigolVisaDS1100ZE:
             else:
                 display = "OFF"
 
-            return self.writeCmd(f"CHANnel{channel}:DISPlay {display}")
+            return self.writeCmd(f":CHANnel{channel}:DISPlay {display}")
     
     def getDisplayChannel(self, channel:int):
         if self.checkValidChannel(channel):
-            display = self.readCmd(f"CHANnel{channel}:DISPlay?")
+            display = self.readCmd(f":CHANnel{channel}:DISPlay?")
             if int(display) == 0:
                 display = False
             else:
@@ -144,3 +160,28 @@ class RigolVisaDS1100ZE:
             return display
         else:
             return None
+    
+    def setChannelScale(self, channel:int, scale:float):
+        if self.checkValidChannel(channel):
+            return self.writeCmd(f":CHANnel{channel}:SCALe {scale}")
+    
+    def getChannelScale(self, channel:int):
+        if self.checkValidChannel(channel):
+            scale = float(self.readCmd(f":CHANnel{channel}:SCALe?"))
+            return scale
+
+    def setTimeBaseScale(self, tScale:float):
+        return self.writeCmd(f":TIMebase:SCALe {tScale}")
+    
+    def getTimeBaseScale(self):
+        tScale = float(self.readCmd(":TIMebase:SCALe?"))
+        return tScale
+    
+    def setWaveformSource(self, channel:RigolWaveformSources):
+        if self.checkValidChannel(RigolWaveformSources.getChannelNumber(channel)):
+            return self.writeCmd(f":WAVeform:SOURce {channel.value}")
+    
+    def getWaveformSource(self):
+        data = self.readCmd(":WAVeform:SOURce?")
+        wavSource = RigolWaveformSources[data]
+        return wavSource

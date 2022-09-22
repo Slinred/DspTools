@@ -1,6 +1,6 @@
 import unittest
 
-from RigolVisaLib import RigolBwLimit, RigolChannelCoupling, RigolVisaDS1100ZE
+from RigolVisaLib import RigolBwLimit, RigolChannelCoupling, RigolVisaDS1100ZE, RigolWaveformSources
 
 SCOPE_ADDR = "TCPIP::172.16.1.121::INSTR"
 
@@ -54,6 +54,47 @@ class TestRigolVisaLib(unittest.TestCase):
             self.assertEqual(d, scope.getDisplayChannel(1))
 
         self.assertTrue(scope.disconnect())    
+
+    def test_RigolDS1100ZE_ChannelScale(self):
+        scope = RigolVisaDS1100ZE(SCOPE_ADDR)
+        self.assertTrue(scope.connect())
+        
+        scales = [0.1, 1, 2, 5, 10]
+
+        for s in scales:
+            scope.setChannelScale(1, s)
+            self.assertEqual(s, scope.getChannelScale(1))
+
+        self.assertTrue(scope.disconnect())  
+
+    def test_RigolDS1100ZE_TimebaseScale(self):
+        scope = RigolVisaDS1100ZE(SCOPE_ADDR)
+        self.assertTrue(scope.connect())
+        
+        tBases = [0.0001, 0.001, 0.002, 0.05, 0.1]
+
+        for t in tBases:
+            scope.setTimeBaseScale(t)
+            self.assertEqual(t, scope.getTimeBaseScale())
+
+        self.assertTrue(scope.disconnect())  
+
+    def test_RigolDS1100ZE_WaveformSource(self):
+        scope = RigolVisaDS1100ZE(SCOPE_ADDR)
+        self.assertTrue(scope.connect())
+
+        for ws in RigolWaveformSources.list():
+            ch = RigolWaveformSources.getChannelNumber(ws)
+
+            if ch <= scope.channels:
+                scope.setWaveformSource(ws)
+                self.assertEqual(ws, scope.getWaveformSource())
+            else:
+                with self.assertRaises(ValueError):
+                    scope.setWaveformSource(ws)
+                    scope.getWaveformSource()
+
+        self.assertTrue(scope.disconnect()) 
 
 if __name__ == '__main__':
     unittest.main()
