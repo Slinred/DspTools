@@ -1,5 +1,6 @@
 from enum import Enum
 import re
+from this import d
 import pyvisa as pv
 
 class ExtendedEnum(Enum):
@@ -40,7 +41,64 @@ class RigolWaveformSources(ExtendedEnum):
             ch = int(match.group(1))
         return ch
 
-class RigolVisaDS1100ZE:
+class RigolWaveformModes(ExtendedEnum):
+    NORM = "NORMal"
+    MAX = "MAXimum"
+    RAW = "RAW"
+
+class RigolWaveformFormats(ExtendedEnum):
+    BYTE = "BYTE"
+    WORD = "WORD"
+    ASC = "ASCii"
+
+class RigolWaveformAxis(ExtendedEnum):
+    X = "X"
+    Y = "Y"
+
+class RigolWaveformParameter:
+    def __init__(self, 
+                    format:RigolWaveformFormats = RigolWaveformFormats.BYTE,
+                    mode: RigolWaveformModes = RigolWaveformModes.NORM,
+                    numPoints:int = 0,
+                    avgCount: int = 0,
+                    xinc:float = 0.0,
+                    xorig:float = 0.0,
+                    xref:float = 0.0,
+                    yinc:float = 0.0,
+                    yorig:float = 0.0,
+                    yref:float = 0.0):
+
+        self.format = format
+        self.mode = mode
+        self.numPoints = numPoints
+        self.avgCount = avgCount
+        self.xinc = xinc
+        self.xorig = xorig
+        self.xref = xref
+        self.yinc = yinc
+        self.yorig = yorig
+        self.yref = yref
+
+    def parsePreamble(self, preamble:str):
+        data = preamble.split(",")
+        
+        if len(data) != 10:
+            raise ValueError("Preamble string doesn't have 10 elems!")
+        
+        self.format = RigolWaveformFormats.list()[int(data[0])]
+        self.mode = RigolWaveformModes.list()[int(data[1])]
+        self.numPoints = int(data[2])
+        self.avgCount = int(data[3])
+        self.xinc = float(data[4])
+        self.xorig = float(data[5])
+        self.xref = float(data[6])
+        self.yinc = float(data[7])
+        self.yorig = float(data[8])
+        self.yref = float(data[9])
+class RigolVisaDS1000ZE:
+
+    WAVEFORM_DATA_HEADER_LENGTH = 12
+
     def __init__(self, addr, maxChannels=2):
         self.addr = addr
         self.channels = maxChannels
@@ -185,3 +243,68 @@ class RigolVisaDS1100ZE:
         data = self.readCmd(":WAVeform:SOURce?")
         wavSource = RigolWaveformSources[data]
         return wavSource
+    
+    def setWaveformMode(self, wavMode:RigolWaveformModes):
+        return self.writeCmd(f":WAVeform:MODE {wavMode.value}")
+
+    def getWaveformMode(self):
+        data = self.readCmd(":WAVeform:MODE?")
+        wavMode = RigolWaveformModes[data]
+        return wavMode
+
+    def setWaveformFormat(self, wavFmt:RigolWaveformFormats):
+        return self.writeCmd(f":WAVeform:FORMat {wavFmt.value}")
+    
+    def getWaveformFormat(self):
+        data = self.readCmd(":WAVeform:FORMat?")
+        wavFmt = RigolWaveformFormats[data]
+        return wavFmt
+
+    def getWaveformData(self):
+        data = self.readCmd(":WAVeform:DATA?", decode=False)
+        data = data[self.WAVEFORM_DATA_HEADER_LENGTH:len(data)]
+
+        values = list()
+        for i in range(len(data)):
+            values.append(float(data[i]))
+
+        return values
+    
+    def getWaveformFromChannel(self, channel:RigolWaveformSources,
+                                mode:RigolWaveformModes,
+                                format:RigolWaveformFormats):
+        self.setWaveformSource(channel)
+        if channel != self.getWaveformSource():
+            raise RuntimeError("Waveform source not set correctly!")
+        
+        self.setWaveformMode(mode)
+        if mode != self.getWaveformMode():
+            raise RuntimeError("Waveform mode not set correctly!")
+        
+        self.setWaveformFormat(format)
+        if format != self.getWaveformFormat():
+            raise RuntimeWarning("Waveform format not set correctly!")
+        
+        return self.getWaveformData()
+    
+    def getWaveformIncrement(self, axis:RigolWaveformAxis):
+        data = self.readCmd(f":WAVeform:{axis.value}INCrement?")
+        inc = float(data)
+        return inc
+    
+    def getWaveformOrigin(self, axis:RigolWaveformAxis):
+        data = self.readCmd(f":WAVeform:{axis.value}ORigin?")
+        orig = float(data)
+        return orig
+    
+    def getWaveformReference(self, axis:RigolWaveformAxis):
+        data = self.readCmd(f":WAVeform:{axis.value}REFerence?")
+        ref = float(data)
+        return ref
+    
+    def getWaveformParameters(self):
+        data = self.readCmd(":WAVeform:PREamble?")
+        params = RigolWaveformParameter()
+        params.parsePreamble(data)
+        return params
+
