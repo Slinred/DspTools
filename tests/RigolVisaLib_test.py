@@ -72,11 +72,15 @@ class TestRigolVisaDS1000ZE(unittest.TestCase):
         scope = RigolVisaDS1000ZE(SCOPE_ADDR)
         self.assertTrue(scope.connect())
         
-        tBases = [0.0001, 0.001, 0.002, 0.05, 0.1]
+        tBases = [0.0001, 0.001, 0.00375, 0.05, 0.1]
 
         for t in tBases:
             scope.setTimeBaseScale(t)
-            self.assertEqual(t, scope.getTimeBaseScale())
+            try:
+                scope.timeBaseScales.index(t)
+                self.assertEqual(t, scope.getTimeBaseScale())
+            except ValueError:
+                self.assertEqual(scope.getValidTimeBaseScale(t), scope.getTimeBaseScale())
 
         self.assertTrue(scope.disconnect())  
 

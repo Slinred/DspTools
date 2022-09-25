@@ -1,6 +1,6 @@
 from enum import Enum
 import re
-from this import d
+import numpy as np
 import pyvisa as pv
 
 class ExtendedEnum(Enum):
@@ -98,6 +98,13 @@ class RigolWaveformParameter:
 class RigolVisaDS1000ZE:
 
     WAVEFORM_DATA_HEADER_LENGTH = 12
+    
+    X_GRID_ELEMS = 10
+    Y_GRID_ELEMS = 8
+
+    TIMEBASE_MIN_S = 2e-9
+    TIMEBASE_MAX_S = 50
+    TIMEBASE_STEPS = [1, 2.5, 5]
 
     def __init__(self, addr, maxChannels=2):
         self.addr = addr
@@ -105,6 +112,7 @@ class RigolVisaDS1000ZE:
         self.instrument = None
         self.id = None
         self.rm = None
+        self.timeBaseScales = self.createTimeBaseVector()
     
     def connect(self):
         self.rm = pv.ResourceManager()
@@ -149,6 +157,33 @@ class RigolVisaDS1000ZE:
                 return data
         else:
             return None
+
+    def createTimeBaseVector(self):
+        timebases = list()
+        step = 10
+        tVal = self.TIMEBASE_MIN_S
+        while tVal <= self.TIMEBASE_MAX_S:
+            for factor in self.TIMEBASE_STEPS:
+                temp = tVal * factor
+                if temp <= self.TIMEBASE_MAX_S:
+                    timebases.append(round(tVal*factor, 8))
+                else:
+                    break
+            tVal = tVal * step
+        return timebases
+
+
+    def getValidTimeBaseScale(self, tScale):
+        timebase = 0
+        for i in range(1,len(self.timeBaseScales)):
+            if tScale < self.timeBaseScales[i]:
+                timebase = self.timeBaseScales[i-1]
+                break
+        
+        if timebase == 0:
+            timebase = self.TIMEBASE_MAX_S
+        
+        return timebase
 
     def checkValidChannel(self, channel:int):
         if channel <= self.channels:
@@ -229,6 +264,8 @@ class RigolVisaDS1000ZE:
             return scale
 
     def setTimeBaseScale(self, tScale:float):
+        tScale = self.getValidTimeBaseScale(tScale)
+
         return self.writeCmd(f":TIMebase:SCALe {tScale}")
     
     def getTimeBaseScale(self):
@@ -286,7 +323,15 @@ class RigolVisaDS1000ZE:
             raise RuntimeWarning("Waveform format not set correctly!")
         
         return self.getWaveformData()
-    
+
+    def convertWaveformDataToVolts(self, data):
+        params = self.getWaveformParameters()
+        volts = list()
+        for d in data:
+            volt = (d - params.yorig - params.yref) * params.yinc
+            volts.append(volt)
+        return volts
+
     def getWaveformIncrement(self, axis:RigolWaveformAxis):
         data = self.readCmd(f":WAVeform:{axis.value}INCrement?")
         inc = float(data)
