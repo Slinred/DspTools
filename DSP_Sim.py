@@ -97,7 +97,7 @@ def main():
     ################################################################################
     # Filter the oversampled signal with linar interpoltion with a biquad lpf
     #
-    bqCoeffsLpf3kHz = BiquadFilter.BQ_Coeffs(-1.4542818459920401, 0.5740622654565052, 0.029945104866116262, 0.059890209732232524, 0.029945104866116262, 1)
+    bqCoeffsLpf3kHz = BiquadFilter.Coefficients(-1.4542818459920401, 0.5740622654565052, 0.029945104866116262, 0.059890209732232524, 0.029945104866116262, 1)
     bqCoeffsLpf3kHz.printCoeffs()
     stages = 5
     bqLpf = BiquadFilter(bqCoeffsLpf3kHz, stages)
